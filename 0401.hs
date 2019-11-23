@@ -51,6 +51,7 @@ isnum O = True
 isnum (Suc t) = isnum t
 isnum _ = False
 
+-- 4.2
 eval :: T -> T
 eval t
     | or [t == Tru, t == Fls, isnum(t), t == X] = t
