@@ -1,5 +1,5 @@
 import Control.Monad.State
-import Debug.Trace
+--import Debug.Trace
 
 data T = Tint Int | Tabs T | Tapp T T | X deriving (Eq, Show)
 data DeBruijn = DeBruijn {
@@ -34,7 +34,7 @@ parse :: [String] -> AST
 parse ts = fst $ runState expr ts
 
 -- 逆戻りはないからZipperじゃなくてリストで十分
--- expr = term ("*" term)*
+-- expr = term (term)*
 expr :: State [String] AST
 expr = do
     t0 <- term
@@ -53,14 +53,17 @@ expr = do
 term :: State [String] AST
 term = do
     token <- (state $ \(t:ts) -> (t, ts))   -- pop的な
-    trace (show token) return ()
     case token of
         "(" -> do
             -- 括弧の中身を独立して処理
-            tokens <- (state $ \(ts) -> (ts, ts))
-            let braket = take (maximum (")" <?- tokens)) tokens
-                residual = drop (maximum (")" <?- tokens)+1) tokens
-            state $ \(ts) -> ((), braket)
+            residual <- (state $ \(ts) -> ($ (ts,[])) . ($ 1) . fix $ \loop i (t:ts,tekarb) ->
+                let i' = case t of
+                            "(" -> i + 1
+                            ")" -> i - 1
+                            _ -> i
+                in if i' == 0
+                        then (ts, reverse tekarb)
+                        else loop i' (ts,t:tekarb))
             expression <- expr
             state $ \(ts) -> ((), residual)
             return expression
