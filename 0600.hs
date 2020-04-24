@@ -1,4 +1,5 @@
 -- 0601.hsでは関数適用を空白で表したが、(*)のほうが実装が素直じゃない？という気持ち
+-- だめだ、ラムダ束縛子を演算子と見るのは無理があった…
 import Control.Monad.State
 --import Debug.Trace
 
