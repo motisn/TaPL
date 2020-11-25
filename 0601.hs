@@ -24,7 +24,7 @@ tokenize = (\(ss, cs) ->
         )) ([], "")
 
 parse :: [String] -> AST
-parse ts = fst $ runState expr ts
+parse = fst . (runState expr)
 
 -- 逆戻りはないからZipperじゃなくてリストで十分
 -- expr = term (term)*
@@ -75,10 +75,55 @@ term = do
                 return $ Var token
 
 -- ASTをde Bruijn項に変換
-data T = Tint Int | Tabs T | Tapp T T | X deriving (Eq, Show)
-data DeBruijn = DeBruijn {
-    _context :: String,
-    _named :: String
-} deriving Show
+data DeBruijn = DBint Int | DBabs DeBruijn | DBapp DeBruijn DeBruijn
+    deriving (Eq, Show)
+data Context = Context {freeVar :: [String], boundVar :: [String]} deriving (Eq, Show)
 
-type Context = [String]
+removename :: AST -> (DeBruijn, Context)
+removename named = runState (_removename named) (Context [] [])
+_removename :: AST -> State Context DeBruijn
+_removename (Var str) = do
+    context <- (state $ \c -> (c, c))
+    case str <?- (boundVar context) of
+        i:is -> do return $ DBint i
+        [] -> case str <?- (freeVar context) of
+            i:is -> do return $ DBint i
+            [] -> do 
+                let newcontext = context {freeVar = (freeVar context) ++ [str]} -- 自由変数は後ろに足す（インデックスが固定）
+                state $ \c -> ((), newcontext)
+                return $ DBint (length (freeVar newcontext) - 1 + length (boundVar newcontext)) -- DBintは0オリジン
+_removename (App t1 t2) = do
+    d1 <- _removename t1
+    d2 <- _removename t2
+    return $ DBapp d1 d2
+_removename (Abs str t) = do
+    context <- (state $ \c -> (c, c))
+    let _context = context {boundVar = str:(boundVar context)} -- 束縛変数は頭から足す（直近のインデックスが最小）
+    state $ \c -> ((), _context)
+    d <- _removename t
+    newcontext <- (state $ \c -> (c, c))
+    state $ \c -> ((), newcontext {boundVar = (boundVar context)}) -- 束縛変数の後片付け
+    return $ DBabs d
+
+restorename :: (DeBruijn, Context) -> AST
+restorename (debruign, context) = fst $ runState (_restorename debruign) context
+_restorename :: DeBruijn -> State Context AST
+_restorename (DBint int) = do
+    context <- (state $ \c -> (c, c))
+    let offset = length (boundVar context)
+    if int < offset
+        then return $ Var (boundVar context !! int)
+        else return $ Var (freeVar context !! (int - offset))
+_restorename (DBapp d1 d2) = do
+    t1 <- _restorename d1
+    t2 <- _restorename d2
+    return $ App t1 t2
+_restorename (DBabs d) = do
+    context <- (state $ \c -> (c, c))
+    let bvar = show $ length (boundVar context)
+    state $ \c -> ((), context {boundVar = bvar:(boundVar context)}) -- 束縛変数は頭から足す
+    t <- _restorename d
+    state $ \c -> ((), context) -- 束縛変数の後片付け
+    return $ Abs bvar t
+
+    
