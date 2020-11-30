@@ -29,3 +29,11 @@ eval1 (DBapp t1 t2) = case t1 of
         v -> shiftDB (-1) (substitute 0 (shiftDB 1 v) t1)   -- E-APPABS
 
 eval t = if t == eval1 t then t else eval (eval1 t)
+
+-- 0703
+eval' (DBint i) = DBint i
+eval' (DBabs t) = DBabs t
+eval' (DBapp t1 t2) = let t1' = eval' t1
+                          v2 = eval' t2
+                      in substitute 0 v2 t1'
+          
